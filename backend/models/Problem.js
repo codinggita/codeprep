@@ -6,7 +6,7 @@ const problemSchema = new mongoose.Schema({
     ref: "User"
   },
 
-  problemNumber: Number,
+  problemNumber: String,
 
   title: String,
 
