@@ -1,12 +1,22 @@
+// const bcrypt = require("bcrypt");
+// const User = require("../models/User");
+// const generateToken = require("../utils/generateToken");
+// const { syncAllPlatforms } = require("../syncService");
+
+// const {
+//   validateLeetCode,
+//   validateCodeforces
+// } = require("../services/platformValidation");
+
 const bcrypt = require("bcrypt");
 const User = require("../models/User");
 const generateToken = require("../utils/generateToken");
+const { syncAllPlatforms } = require("../syncService");
 
 const {
   validateLeetCode,
   validateCodeforces
 } = require("../services/platformValidation");
-
 
 // REGISTER USER
 exports.registerUser = async (req, res) => {
@@ -90,6 +100,9 @@ exports.registerUser = async (req, res) => {
       token: generateToken(user._id)
 
     });
+    
+    // Background sync on register
+    syncAllPlatforms(user).catch(err => console.error("Register sync failed:", err));
 
   } catch (err) {
 
@@ -101,11 +114,9 @@ exports.registerUser = async (req, res) => {
 
 };
 
+// const { syncAllPlatforms } = require("../syncService");
 
-
-// LOGIN USER
 exports.loginUser = async (req, res) => {
-
   try {
 
     const { email, password } = req.body;
@@ -113,42 +124,29 @@ exports.loginUser = async (req, res) => {
     const user = await User.findOne({ email });
 
     if (!user) {
-      return res.status(401).json({
-        message: "User not found"
-      });
+      return res.status(401).json({ message: "Invalid credentials" });
     }
 
-    const valid = await bcrypt.compare(password, user.password);
+    const match = await bcrypt.compare(password, user.password);
 
-    if (!valid) {
-      return res.status(401).json({
-        message: "Incorrect password"
-      });
+    if (!match) {
+      return res.status(401).json({ message: "Invalid credentials" });
     }
+
+    console.log("LOGIN SUCCESS — starting sync");
+
+    // force sync
+    await syncAllPlatforms(user);
+
+    const token = generateToken(user._id);
 
     res.json({
-
-      message: "Login successful",
-
-      user: {
-        _id: user._id,
-        username: user.username,
-        email: user.email,
-        platforms: user.platforms,
-        dailyGoal: user.dailyGoal,
-        streak: user.streak
-      },
-
-      token: generateToken(user._id)
-
+      token,
+      user
     });
 
   } catch (err) {
-
-    res.status(500).json({
-      error: err.message
-    });
-
+    console.error(err);
+    res.status(500).json({ error: err.message });
   }
-
 };
