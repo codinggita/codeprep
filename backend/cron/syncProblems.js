@@ -1,72 +1,104 @@
-const cron = require("node-cron");
-const User = require("../models/User");
-const Problem = require("../models/Problem");
+import cron from "node-cron";
+import User from "../models/User.js";
+import Problem from "../models/Problem.js";
+import { fetchLeetCodeSolved } from "../services/leetcodeService.js";
+import { fetchCodeforcesSolved } from "../services/codeforcesService.js";
 
-const fetchLeetCodeSolved = require("../services/leetcodeService");
-const fetchCodeforcesSolved = require("../services/codeforcesService");
+/* LeetCode sync every 30 minutes */
 
-
-// LeetCode every 30 min
 cron.schedule("*/30 * * * *", async () => {
 
-  const users = await User.find({ "platforms.leetcode": { $exists: true } });
+  console.log("Running LeetCode sync...");
+
+  const users = await User.find({
+    "platforms.leetcode": { $ne: null }
+  });
 
   for (const user of users) {
 
-    const problems = await fetchLeetCodeSolved(
-      user.platforms.leetcode,
-      user.lastSync?.leetcode
-    );
+    try {
 
-    for (const p of problems) {
-
-      await Problem.updateOne(
-        {
-          userId: user._id,
-          title: p.title,
-          platform: "leetcode"
-        },
-        { $set: p },
-        { upsert: true }
+      const problems = await fetchLeetCodeSolved(
+        user.platforms.leetcode
       );
+
+      for (const p of problems) {
+
+        await Problem.updateOne(
+          {
+            userId: user._id,
+            title: p.title,
+            platform: "leetcode"
+          },
+          {
+            $set: p
+          },
+          {
+            upsert: true
+          }
+        );
+
+      }
+
+      user.lastSync.leetcode = new Date();
+      await user.save();
+
+    } catch (err) {
+
+      console.error("LeetCode sync error:", err.message);
 
     }
 
-    user.lastSync.leetcode = new Date();
-    await user.save();
   }
 
 });
 
 
-// Codeforces every 1 hr
+/* Codeforces sync every hour */
+
 cron.schedule("0 * * * *", async () => {
 
-  const users = await User.find({ "platforms.codeforces": { $exists: true } });
+  console.log("Running Codeforces sync...");
+
+  const users = await User.find({
+    "platforms.codeforces": { $ne: null }
+  });
 
   for (const user of users) {
 
-    const problems = await fetchCodeforcesSolved(
-      user.platforms.codeforces,
-      user.lastSync?.codeforces
-    );
+    try {
 
-    for (const p of problems) {
-
-      await Problem.updateOne(
-        {
-          userId: user._id,
-          title: p.title,
-          platform: "codeforces"
-        },
-        { $set: p },
-        { upsert: true }
+      const problems = await fetchCodeforcesSolved(
+        user.platforms.codeforces
       );
+
+      for (const p of problems) {
+
+        await Problem.updateOne(
+          {
+            userId: user._id,
+            title: p.title,
+            platform: "codeforces"
+          },
+          {
+            $set: p
+          },
+          {
+            upsert: true
+          }
+        );
+
+      }
+
+      user.lastSync.codeforces = new Date();
+      await user.save();
+
+    } catch (err) {
+
+      console.error("Codeforces sync error:", err.message);
 
     }
 
-    user.lastSync.codeforces = new Date();
-    await user.save();
   }
 
 });
